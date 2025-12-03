@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGRAND Decoding Visualization - JAIST XU Pengfei</title>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* 基础字体设置 */
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #334155; }
+
+        /* 等宽字体类 - 用于数据展示 */
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* 布局与滚动条 */
+        #network-container { width: 100%; height: 100%; position: absolute; top:0; left:0; outline: none; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        /* KaTeX 字体微调 */
+        .katex { font-size: 1.3em; }
+
+        /* 动画 */
+        @keyframes flash-blue { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+        .highlight-new { animation: flash-blue 0.5s ease-out forwards; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="h-screen flex flex-col overflow-hidden text-slate-800 pb-2">
+
+    <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">SG</div>
+            <h1 class="font-bold text-sm text-slate-700 flex items-center gap-2">
+                SGRAND <span class="text-slate-400 font-normal text-xs bg-slate-100 px-2 py-0.5 rounded mono" v-if="meta">{{ meta.name }}</span>
+            </h1>
+
+            <div class="flex items-center bg-slate-100 rounded-lg p-1 ml-4 border border-slate-200">
+                <button @click="viewMode = 'heap'"
+                        class="px-3 py-1 text-xs font-bold rounded transition-all"
+                        :class="viewMode === 'heap' ? 'bg-white text-amber-600 shadow' : 'text-slate-400 hover:text-slate-600'">
+                    Min-Heap
+                </button>
+                <button @click="viewMode = 'tree'"
+                        class="px-3 py-1 text-xs font-bold rounded transition-all"
+                        :class="viewMode === 'tree' ? 'bg-white text-indigo-600 shadow' : 'text-slate-400 hover:text-slate-600'">
+                    Search Tree
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200 shadow-sm">
+            <button @click="firstStep" :disabled="!traceData || currentStep <= 0" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-400 transition disabled:opacity-30"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg></button>
+            <button @click="prevStep" :disabled="!traceData || currentStep <= 0" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Previous (Left Arrow)"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+
+            <div @click="jumpToStep" class="w-32 text-center text-xs font-mono font-medium select-none flex items-center justify-center gap-2 mx-2 cursor-pointer hover:bg-slate-100 rounded transition" title="Click to Jump">
+                <span class="text-slate-400">Query</span>
+                <span class="text-indigo-600 font-bold bg-indigo-50 px-1.5 rounded">{{ currentStep + 1 }}</span>
+                <span class="text-slate-300">/</span>
+                <span class="text-slate-500">{{ totalSteps }}</span>
+            </div>
+
+            <button @click="togglePlay" :disabled="!traceData" class="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm hover:border-indigo-300 text-xs font-semibold w-16 disabled:opacity-50 text-slate-700 transition" title="Play/Pause (Space)">{{ isPlaying ? 'Pause' : 'Play' }}</button>
+            <button @click="nextStep" :disabled="!traceData || currentStep >= totalSteps - 1" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Next (Right Arrow)"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+            <button @click="lastStep" :disabled="!traceData || currentStep >= totalSteps - 1" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-400 transition disabled:opacity-30"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg></button>
+
+            <div class="h-6 w-px bg-slate-200 mx-2"></div>
+
+            <button @click="autoFocus = !autoFocus" class="flex items-center gap-2 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition" :class="autoFocus ? 'bg-indigo-100 text-indigo-700' : 'bg-transparent text-slate-400 hover:bg-slate-100'">
+                <span class="w-2 h-2 rounded-full" :class="autoFocus ? 'bg-indigo-500' : 'bg-slate-300'"></span>
+                Auto-Follow
+            </button>
+        </div>
+
+        <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-medium transition shadow flex items-center gap-2 group">
+            <svg class="w-3 h-3 text-slate-400 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            Load JSON Trace
+            <input type="file" @change="loadJson" accept=".json" class="hidden">
+        </label>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden relative">
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.01)] shrink-0 font-inter">
+
+            <div class="h-8 border-b border-slate-100 bg-slate-50/80 backdrop-blur flex items-center px-4 sticky top-0 z-10 justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                     <div class="w-1.5 h-1.5 rounded-full" :class="isPlaying ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'"></div>
+                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">State Inspector</span>
+                </div>
+                <span class="text-[10px] mono text-slate-300" v-if="traceData">{{ currentStep + 1 }} / {{ totalSteps }}</span>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 custom-scroll space-y-6" v-if="currentData">
+
+                <div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                        <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide">Current Query</h2>
+                        <span class="text-[11px] text-slate-400 font-mono bg-slate-100 px-1.5 rounded" v-html="renderMath('\\vec{e}')"></span>
+                    </div>
+
+                    <div class="bg-indigo-50/30 border border-indigo-100 rounded-lg p-3 flex gap-3">
+                        <div class="flex-1 border-r border-indigo-100 pr-3">
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Metric</span>
+                            </div>
+                            <div class="text-3xl font-bold mono text-indigo-600 tracking-tight leading-none">
+                                {{ formatMetric(currentData.metric) }}
+                            </div>
+                            <div class="text-[9px] text-indigo-400/70 mt-1.5 leading-tight">Euclidean Distance</div>
+                        </div>
+
+                        <div class="flex-1 min-w-0 flex flex-col justify-center pl-1">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Flipped Bits</span>
+                                <span class="text-[9px] bg-white text-indigo-400 px-1.5 rounded border border-indigo-100 font-mono font-bold">{{ currentData.error_indices ? currentData.error_indices.length : 0 }}</span>
+                            </div>
+                            <div class="font-mono text-[13px] font-medium text-slate-700 break-all leading-tight">
+                                {{ formatIndices(currentData.error_indices) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="traceData.y">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <label class="text-xs font-bold text-slate-700 uppercase tracking-wide">Received y</label>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-100 rounded-lg p-2 max-h-[200px] overflow-y-auto custom-scroll">
+                        <div class="flex flex-wrap gap-1.5">
+                            <div v-for="(val, i) in traceData.y" :key="i"
+                                 class="flex flex-col items-center justify-center border border-slate-200 bg-white rounded w-9 h-10 shadow-sm">
+                                <span class="text-[9px] text-slate-300 leading-none mb-0.5">{{i}}</span>
+                                <span class="text-[10px] mono font-bold leading-none"
+                                      :class="val < 0 ? 'text-blue-600' : 'text-orange-600'">
+                                    {{ val.toFixed(1) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="traceData.oei">
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="flex items-center gap-2">
+                             <div class="text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"></path></svg>
+                            </div>
+                            <label class="text-xs font-bold text-slate-700 uppercase tracking-wide">OEI ORDER</label>
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-medium tracking-tight">Least Reliable &rarr; Most</span>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-100 rounded-lg p-2 flex flex-wrap gap-1.5 max-h-56 overflow-y-auto custom-scroll">
+                        <div v-for="(idx, i) in traceData.oei" :key="i"
+                              class="flex flex-col items-center justify-center border rounded w-9 h-10 transition-all duration-200 shadow-sm"
+                              :class="currentData.error_indices.includes(idx) ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200' : 'bg-white border-slate-100'">
+
+                            <span class="text-[11px] mono font-bold leading-none mb-0.5"
+                                  :class="currentData.error_indices.includes(idx) ? 'text-indigo-700' : 'text-slate-600'">
+                                {{ idx }}
+                            </span>
+
+                            <span class="text-[9px] mono leading-none"
+                                  :class="currentData.error_indices.includes(idx) ? 'text-indigo-400' : 'text-slate-300'">
+                                {{ formatY(traceData.y[idx]) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="text-slate-400">
+                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                            </div>
+                            <label class="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1">
+                                CANDIDATE
+                                <span class="mono normal-case text-slate-400 text-[10px] bg-slate-50 px-1 rounded" v-html="renderMath('\\hat{c}')"></span>
+                            </label>
+                        </div>
+
+                        <span v-if="currentData.is_valid" class="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">VALID</span>
+                        <span v-else class="text-[10px] font-bold bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full border border-slate-200">INVALID</span>
+                    </div>
+
+                    <div class="bg-slate-800 text-white rounded-lg p-3 mono text-sm break-all leading-relaxed shadow-sm border transition-colors duration-300"
+                         :class="currentData.is_valid ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-700'">
+
+                         <div class="flex flex-wrap gap-x-[1px]">
+                             <span v-for="(char, index) in currentCandidate" :key="index"
+                                   class="inline-block w-[9px] text-center"
+                                   :class="currentData.error_indices.includes(index)
+                                           ? 'text-orange-400 font-bold scale-110'
+                                           : 'text-slate-500'">
+                                 {{ char }}
+                             </span>
+                         </div>
+                    </div>
+                </div>
+
+                <div v-if="traceData.final_codeword && currentData.is_valid" class="mt-2">
+                    <div class="bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-lg p-3 mono text-sm break-all leading-relaxed shadow-sm">
+                        <div class="text-[10px] font-bold text-emerald-600 mb-1 flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            FINAL RESULT
+                        </div>
+                        {{ traceData.final_codeword.join('') }}
+                    </div>
+                </div>
+
+            </div>
+
+            <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-300 p-8 text-center space-y-2">
+                <svg class="w-10 h-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span class="text-sm">Waiting for trace...</span>
+            </div>
+        </aside>
+        <div class="flex-1 bg-slate-50/50 relative overflow-hidden flex flex-col cursor-move">
+            <div id="network-container" ref="networkRef"></div>
+
+            <div class="absolute bottom-6 left-6 bg-white/90 backdrop-blur border border-slate-200 p-3 rounded-xl shadow-lg text-[10px] pointer-events-none opacity-80 z-10">
+                <div class="font-bold text-slate-500 mb-2 border-b border-slate-100 pb-1">
+                    {{ viewMode === 'tree' ? 'SEARCH TREE LEGEND' : 'MIN-HEAP LEGEND' }}
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-500 shadow-sm"></span> Valid Code</div>
+                    <div class="flex items-center gap-2" v-if="viewMode === 'tree'"><span class="w-2.5 h-2.5 rounded bg-orange-50 border border-orange-400 shadow-sm"></span> Current Query</div>
+                    <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded bg-sky-50 border border-sky-400 shadow-sm"></span> Newly Added</div>
+                    <div class="flex items-center gap-2" v-if="viewMode === 'tree'"><span class="w-2.5 h-2.5 rounded bg-white border border-slate-300"></span> In Queue</div>
+                    <div class="flex items-center gap-2" v-if="viewMode === 'tree'"><span class="w-2.5 h-2.5 rounded bg-slate-200 border border-slate-400"></span> Visited</div>
+                    <div class="flex items-center gap-2" v-if="viewMode === 'heap'"><span class="w-2.5 h-2.5 rounded bg-white border border-slate-300"></span> Heap Node</div>
+                </div>
+            </div>
+
+            <div class="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
+                <button @click="zoomIn" class="w-8 h-8 bg-white border border-slate-200 rounded-lg shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-300 flex items-center justify-center transition" title="Zoom In">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+                <button @click="fitView" class="w-8 h-8 bg-white border border-slate-200 rounded-lg shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-300 flex items-center justify-center transition" title="Fit to Screen">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                </button>
+                <button @click="zoomOut" class="w-8 h-8 bg-white border border-slate-200 rounded-lg shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-300 flex items-center justify-center transition" title="Zoom Out">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <aside class="w-80 bg-white border-l border-slate-200 flex flex-col z-20 shadow-[-4px_0_24px_rgba(0,0,0,0.01)] h-full">
+
+            <div v-if="viewMode === 'heap'" class="bg-slate-50 border-b border-slate-200 p-3 shrink-0 shadow-sm">
+                <div class="text-[10px] font-bold text-slate-400 mb-2 flex justify-between items-center">
+                    <span>POPPED HISTORY</span>
+                    <span class="text-[9px] bg-white border px-1.5 rounded">{{ poppedHistory.length }}</span>
+                </div>
+                <div class="flex gap-2 overflow-x-auto custom-scroll pb-2 items-start min-h-[50px]">
+                    <div v-for="(item, idx) in poppedHistory" :key="idx" class="shrink-0 flex flex-col items-center group cursor-default">
+                        <span class="text-[8px] text-slate-400 mb-0.5 font-mono">Step {{ item.stepNum }}</span>
+
+                        <div class="border rounded px-2 py-1 shadow-sm min-w-[60px] text-center transition flex flex-col"
+                             :class="[
+                                item.is_valid ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-200 shadow-md' :
+                                (idx === 0 ? 'bg-orange-50 border-orange-400' : 'bg-white border-slate-200 opacity-70')
+                             ]">
+
+                            <div class="text-[10px] mono font-bold truncate max-w-[80px]"
+                                 :class="item.is_valid ? 'text-emerald-800' : (idx === 0 ? 'text-orange-800' : 'text-slate-600')">
+                                {{ formatIndices(item.error_indices) }}
+                            </div>
+
+                            <div class="text-[9px] mono"
+                                 :class="item.is_valid ? 'text-emerald-600 font-bold' : (idx === 0 ? 'text-orange-600' : 'text-slate-400')">
+                                {{ formatMetric(item.metric) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="poppedHistory.length === 0" class="text-slate-300 text-[10px] italic p-2 w-full text-center">No history yet</div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-white border-b border-slate-100 flex justify-between items-center shrink-0">
+                <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" v-html="renderMath('\\text{Priority Queue } \\mathcal{S}')"></h2>
+                <span class="text-[10px] bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full mono font-bold shadow-sm" v-if="currentData && currentData.queue">{{ currentData.queue.length }}</span>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scroll bg-white">
+                <ul v-if="currentData && currentData.queue && currentData.queue.length" class="divide-y divide-slate-50">
+                    <li v-for="(item, idx) in currentData.queue" :key="idx"
+                        class="px-4 py-2 text-xs flex justify-between items-center transition group cursor-default border-l-4 border-transparent"
+                        :class="{
+                            'bg-sky-50 border-sky-400 highlight-new': isNewItem(item.err),
+                            'hover:bg-slate-50': !isNewItem(item.err)
+                        }">
+                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <span class="text-[9px] text-slate-300 w-4 font-mono text-right">{{ idx + 1 }}</span>
+                            <div class="mono truncate font-medium"
+                                 :class="isNewItem(item.err) ? 'text-sky-700' : 'text-slate-600'">
+                                {{ formatIndices(item.err) }}
+                            </div>
+                            <span v-if="isNewItem(item.err)" class="bg-sky-500 text-white text-[8px] font-bold px-1 rounded shadow-sm animate-pulse">NEW</span>
+                        </div>
+                        <div class="mono font-bold text-slate-300 text-[10px] group-hover:text-indigo-500 transition ml-2">{{ formatMetric(item.metric) }}</div>
+                    </li>
+                </ul>
+                <div v-else class="h-full flex flex-col items-center justify-center text-slate-300 text-xs italic gap-2"><span>Queue Empty</span><span v-html="renderMath('\\mathcal{S} = \\emptyset')"></span></div>
+            </div>
+
+            <div class="border-t border-slate-200 bg-white flex flex-col shrink-0 relative z-30 resize-y overflow-hidden min-h-[160px] max-h-[500px]" style="height: 200px;">
+                <div class="p-2 px-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 pointer-events-none">
+                    <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" v-html="renderMath('\\text{Reliability } |y|')"></h2>
+                    <span class="text-[9px] text-slate-400 opacity-70">Red = Flipped</span>
+                </div>
+                <div class="flex-1 p-2 relative w-full h-full"><canvas ref="chartRef"></canvas></div>
+                <div class="absolute bottom-1 right-1 pointer-events-none opacity-20"><svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M18 10a2 2 0 11-4 0 2 2 0 014 0zM18 16a2 2 0 11-4 0 2 2 0 014 0zM12 16a2 2 0 11-4 0 2 2 0 014 0z" /></svg></div>
+            </div>
+        </aside>
+    </main>
+    <footer class="h-4 shrink-0"></footer>
+</div>
+
+<script>
+    const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
+
+    // --- CONFIGURATION ---
+    const COLOR_THEME = {
+        valid:   { bg: '#ecfdf5', border: '#10b981', font: '#064e3b', width: 3 },
+        active:  { bg: '#fff7ed', border: '#f97316', font: '#9a3412', width: 3 },
+        new:     { bg: '#f0f9ff', border: '#0ea5e9', font: '#0369a1', width: 2 },
+        visited: { bg: '#f1f5f9', border: '#cbd5e1', font: '#94a3b8', width: 1 },
+        queue:   { bg: '#ffffff', border: '#e2e8f0', font: '#64748b', width: 1 },
+
+        // Heap View Special (Solid Border)
+        heapNode: { bg: '#ffffff', border: '#cbd5e1', font: '#475569', width: 1, dashed: false }
+    };
+
+    createApp({
+        setup() {
+            // --- STATE ---
+            const traceData = ref(null);
+            const currentStep = ref(0);
+            const isPlaying = ref(false);
+            const playInterval = ref(null);
+            const autoFocus = ref(true);
+            const newlyAddedSet = ref(new Set());
+            const viewMode = ref('heap'); // DEFAULT: Heap View
+            const poppedHistory = ref([]);
+
+            const networkRef = ref(null);
+            const chartRef = ref(null);
+            let network = null;
+            let chart = null;
+            let nodes = new vis.DataSet();
+            let edges = new vis.DataSet();
+            const nodeLevelMap = new Map();
+
+            // --- COMPUTED ---
+            const totalSteps = computed(() => traceData.value ? traceData.value.steps.length : 0);
+            const meta = computed(() => traceData.value ? traceData.value.meta : null);
+            const currentData = computed(() => traceData.value ? traceData.value.steps[currentStep.value] : null);
+
+            const thetaY = computed(() => {
+                if (!traceData.value || !traceData.value.y) return [];
+                return traceData.value.y.map(val => val < 0 ? 1 : 0);
+            });
+
+            const currentCandidate = computed(() => {
+                if (!currentData.value || !thetaY.value.length) return "";
+                const c = [...thetaY.value];
+                const errIndices = currentData.value.error_indices;
+                errIndices.forEach(idx => {
+                    if (idx < c.length) c[idx] ^= 1;
+                });
+                return c.join('');
+            });
+
+            // --- HELPERS ---
+            const formatIndices = (arr) => (!arr || arr.length === 0) ? "∅" : `{${arr.join(', ')}}`;
+            const formatMetric = (val) => (typeof val === 'number') ? val.toFixed(3) : "-";
+            const formatY = (val) => (typeof val === 'number') ? val.toFixed(2) : "";
+            const renderMath = (latex) => { try { return katex.renderToString(latex, { throwOnError: false, displayMode: false }); } catch (e) { return latex; } };
+            const getVectorId = (errArr) => JSON.stringify(errArr ? errArr.sort((a,b)=>a-b) : []);
+            const isNewItem = (errArr) => newlyAddedSet.value.has(getVectorId(errArr));
+
+            // --- GRAPH LOGIC ---
+
+            const createNodeObject = (id, err, metric, type, level = 0) => {
+                let style = COLOR_THEME[type] || COLOR_THEME.queue;
+                if (viewMode.value === 'heap' && type === 'queue') style = COLOR_THEME.heapNode;
+
+                const hlColor = { background: style.bg, border: style.border };
+
+                return {
+                    id: id,
+                    label: `Err: ${formatIndices(err)}\nM: ${formatMetric(metric)}`,
+                    level: level,
+                    shape: 'box',
+                    color: {
+                        background: style.bg,
+                        border: style.border,
+                        highlight: hlColor
+                    },
+                    // 确保节点使用 JetBrains Mono 字体
+                    font: { face: 'JetBrains Mono', size: 12, color: style.font },
+                    margin: 10, borderWidth: style.width,
+                    widthConstraint: { minimum: 120, maximum: 180 },
+                    shapeProperties: { borderDashes: style.dashed || false },
+                    shadow: type === 'valid' || type === 'active' || type === 'new'
+                };
+            };
+
+            const syncGraphToStep = (targetStepIdx) => {
+                if (!traceData.value) return;
+
+                const steps = traceData.value.steps;
+                const currentStepData = steps[targetStepIdx];
+                const activeId = currentStepData.id;
+
+                // Update Newly Added
+                if (targetStepIdx > 0) {
+                    const prevQ = steps[targetStepIdx - 1].queue || [];
+                    const currQ = steps[targetStepIdx].queue || [];
+                    const prevIds = new Set(prevQ.map(i => getVectorId(i.err)));
+                    const currentDiff = new Set();
+                    currQ.forEach(item => { if (!prevIds.has(getVectorId(item.err))) currentDiff.add(getVectorId(item.err)); });
+                    newlyAddedSet.value = currentDiff;
+                } else {
+                    const currQ = steps[targetStepIdx].queue || [];
+                    newlyAddedSet.value = new Set(currQ.map(item => getVectorId(item.err)));
+                }
+
+                const newNodes = [];
+                const newEdges = [];
+                const updates = [];
+                const currentVisIds = new Set(nodes.getIds());
+
+                // === MODE A: SEARCH TREE ===
+                if (viewMode.value === 'tree') {
+                    const validGraphIds = new Set();
+
+                    for (let i = 0; i <= targetStepIdx; i++) {
+                        const s = steps[i];
+                        let type = 'visited';
+                        if (s.id === activeId) type = s.is_valid ? 'valid' : 'active';
+                        validGraphIds.add(s.id);
+
+                        let level = nodeLevelMap.get(s.id) || 0;
+
+                        if (currentVisIds.has(s.id)) {
+                            updates.push(createNodeObject(s.id, s.error_indices, s.metric, type, level));
+                        } else {
+                            newNodes.push(createNodeObject(s.id, s.error_indices, s.metric, type, level));
+                            if (s.parent) newEdges.push({ id: `${s.parent}-${s.id}`, from: s.parent, to: s.id });
+                        }
+                    }
+
+                    const queue = currentStepData.queue || [];
+                    queue.forEach(item => {
+                        if (item.id && item.parent) {
+                            validGraphIds.add(item.id);
+                            const vecId = getVectorId(item.err);
+                            const isNew = newlyAddedSet.value.has(vecId);
+                            const type = isNew ? 'new' : 'queue';
+
+                            let level = (nodeLevelMap.get(item.parent) || 0) + 1;
+
+                            if (currentVisIds.has(item.id)) {
+                                updates.push(createNodeObject(item.id, item.err, item.metric, type, level));
+                            } else {
+                                newNodes.push(createNodeObject(item.id, item.err, item.metric, type, level));
+                                newEdges.push({ id: `${item.parent}-${item.id}`, from: item.parent, to: item.id });
+                            }
+                        }
+                    });
+
+                    const nodesToRemove = nodes.getIds().filter(id => !validGraphIds.has(id));
+                    if (nodesToRemove.length) nodes.remove(nodesToRemove);
+
+                // === MODE B: MIN-HEAP ===
+                } else {
+                    const rawHistory = steps.slice(0, targetStepIdx + 1);
+                    poppedHistory.value = rawHistory.map((s, i) => ({
+                        ...s,
+                        stepNum: i + 1
+                    })).reverse();
+
+                    const queue = currentStepData.queue || [];
+                    const heapNodeIds = new Set();
+
+                    queue.forEach((item, index) => {
+                        const heapId = `heap_${index}`;
+                        heapNodeIds.add(heapId);
+
+                        const vecId = getVectorId(item.err);
+                        const isNew = newlyAddedSet.value.has(vecId);
+                        const type = isNew ? 'new' : 'queue';
+
+                        const level = Math.floor(Math.log2(index + 1));
+
+                        if (currentVisIds.has(heapId)) {
+                            updates.push(createNodeObject(heapId, item.err, item.metric, type, level));
+                        } else {
+                            newNodes.push(createNodeObject(heapId, item.err, item.metric, type, level));
+                        }
+
+                        if (index > 0) {
+                            const parentIdx = Math.floor((index - 1) / 2);
+                            const parentHeapId = `heap_${parentIdx}`;
+                            const edgeId = `edge_${parentIdx}_${index}`;
+                            if (!edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: parentHeapId, to: heapId, arrows: undefined });
+                            }
+                        }
+                    });
+
+                    const nodesToRemove = nodes.getIds().filter(id => !heapNodeIds.has(id));
+                    if (nodesToRemove.length) nodes.remove(nodesToRemove);
+                }
+
+                // Commit
+                if (newNodes.length) nodes.add(newNodes);
+                if (updates.length) nodes.update(updates);
+
+                const currentEdgeIds = new Set(edges.getIds());
+                const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.id));
+                if (edgesToAdd.length) edges.add(edgesToAdd);
+
+                // --- FOCUS STRATEGY ---
+                if (network && autoFocus.value) {
+                    if (viewMode.value === 'heap') {
+                        network.fit({
+                            animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" }
+                        });
+                    } else if (viewMode.value === 'tree' && activeId) {
+                        if (nodes.get(activeId)) {
+                            network.focus(activeId, {
+                                scale: network.getScale(),
+                                offset: {x: 0, y: 0},
+                                animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" }
+                            });
+                        }
+                    }
+                }
+
+                if (chart) {
+                    const oei = traceData.value.oei;
+                    const errs = currentStepData.error_indices || [];
+                    const bgColors = oei.map(idx => errs.includes(idx) ? '#ef4444' : '#e2e8f0');
+                    chart.data.datasets[0].backgroundColor = bgColors;
+                    chart.update('none');
+                }
+            };
+
+            // --- VIEW CONTROLS ---
+            const zoomIn = () => { if(network) { const s = network.getScale(); network.moveTo({scale: s * 1.2}); } };
+            const zoomOut = () => { if(network) { const s = network.getScale(); network.moveTo({scale: s / 1.2}); } };
+            const fitView = () => { if(network) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); };
+
+            // --- JUMP & KEYBOARD ---
+            const jumpToStep = () => {
+                const input = prompt(`Jump to step (1 - ${totalSteps.value}):`);
+                if (input) {
+                    const step = parseInt(input) - 1;
+                    if (!isNaN(step) && step >= 0 && step < totalSteps.value) {
+                        stopPlay();
+                        currentStep.value = step;
+                    }
+                }
+            };
+
+            const handleKeydown = (e) => {
+                if (!traceData.value) return;
+                switch(e.key) {
+                    case "ArrowRight": nextStep(); break;
+                    case "ArrowLeft": prevStep(); break;
+                    case " ": e.preventDefault(); togglePlay(); break;
+                    case "Home": firstStep(); break;
+                    case "End": lastStep(); break;
+                }
+            };
+
+            // --- FILE LOAD & INIT ---
+            const loadJson = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        traceData.value = json;
+                        nodeLevelMap.clear();
+                        if (json.steps) json.steps.forEach(step => {
+                            let level = 0;
+                            if (step.parent && nodeLevelMap.has(step.parent)) level = nodeLevelMap.get(step.parent) + 1;
+                            nodeLevelMap.set(step.id, level);
+                        });
+                        initVisualization();
+                    } catch(err) { alert("JSON Error: " + err.message); }
+                };
+                reader.readAsText(file);
+            };
+
+            const initVisualization = () => {
+                stopPlay();
+                currentStep.value = 0;
+                nodes.clear();
+                edges.clear();
+                if (chart && traceData.value) {
+                    const oei = traceData.value.oei;
+                    const y = traceData.value.y;
+                    const sortedY = oei.map(idx => Math.abs(y[idx]));
+                    chart.data.labels = oei;
+                    chart.data.datasets[0].data = sortedY;
+                    chart.data.datasets[0].backgroundColor = new Array(sortedY.length).fill('#e2e8f0');
+                    chart.update();
+                }
+                syncGraphToStep(0);
+            };
+
+            // --- WATCHERS ---
+            watch(currentStep, (newVal) => syncGraphToStep(newVal));
+
+            watch(viewMode, () => {
+                nodes.clear();
+                edges.clear();
+                const layoutConfig = {
+                    hierarchical: {
+                        enabled: true,
+                        direction: 'UD',
+                        sortMethod: 'directed',
+                        levelSeparation: 120,
+                        nodeSpacing: viewMode.value === 'heap' ? 250 : 200,
+                        treeSpacing: 250,
+                        blockShifting: false,
+                        edgeMinimization: false,
+                        parentCentralization: true
+                    }
+                };
+                network.setOptions({ layout: layoutConfig });
+                network.setOptions({ physics: { enabled: false, stabilization: false } });
+                syncGraphToStep(currentStep.value);
+            });
+
+            // --- CONTROLS ---
+            const nextStep = () => { if (currentStep.value < totalSteps.value - 1) currentStep.value++; else stopPlay(); };
+            const prevStep = () => { if (currentStep.value > 0) currentStep.value--; };
+            const firstStep = () => { stopPlay(); currentStep.value = 0; };
+            const lastStep = () => { stopPlay(); if(totalSteps.value > 0) currentStep.value = totalSteps.value - 1; };
+            const togglePlay = () => { isPlaying.value ? stopPlay() : (isPlaying.value = true, playInterval.value = setInterval(nextStep, 600)); };
+            const stopPlay = () => { isPlaying.value = false; clearInterval(playInterval.value); };
+
+            onMounted(() => {
+                // 1. 设置 Chart.js 默认字体为 Inter，保持 UI 统一
+                Chart.defaults.font.family = "'Inter', sans-serif";
+                Chart.defaults.color = '#64748b'; // slate-500
+
+                // 2. 初始化 Vis Network
+                network = new vis.Network(networkRef.value, { nodes, edges }, {
+                    interaction: { dragNodes: false, dragView: true, zoomView: true, hover: true },
+                    layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', levelSeparation: 100, nodeSpacing: 200, treeSpacing: 200, blockShifting: false, edgeMinimization: false, parentCentralization: true } },
+                    physics: { enabled: false, stabilization: false },
+                    nodes: {
+                        shadow: { color: 'rgba(0,0,0,0.1)', size: 5 },
+                        borderWidthSelected: 2
+                    },
+                    edges: { color: '#cbd5e1', smooth: false }
+                });
+
+                // 3. 初始化 Chart
+                chart = new Chart(chartRef.value.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 4 }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                display: true,
+                                grid: { display: false },
+                                ticks: { display: false } // X轴文字（索引）隐藏，因为上方OEI已经显示了
+                            },
+                            y: { display: false }
+                        },
+                        animation: false
+                    }
+                });
+
+                window.addEventListener('resize', () => {
+                     if(chart) chart.resize();
+                     if(network) network.fit();
+                });
+                window.addEventListener('keydown', handleKeydown);
+            });
+
+            onUnmounted(() => {
+                window.removeEventListener('keydown', handleKeydown);
+                stopPlay();
+            });
+
+            return {
+                traceData, currentStep, totalSteps, meta, currentData, isPlaying,
+                networkRef, chartRef, loadJson, nextStep, prevStep, firstStep, lastStep,
+                togglePlay, formatIndices, formatMetric, formatY, renderMath,
+                autoFocus, isNewItem, currentCandidate, thetaY, viewMode, poppedHistory,
+                zoomIn, zoomOut, fitView, jumpToStep
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
