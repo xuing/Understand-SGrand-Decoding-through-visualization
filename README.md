@@ -47,8 +47,14 @@ Learn_SGrand_Decoding/
 
 3. visualization:
   
-    sgrand_visualization.html
+   You can view the decoding process using sgrand_visualization.html.
 
+   Either deploy the HTML file locally, or directly open:
+
+   https://www.jaist.ac.jp/~s2510082/sgrand_visualization.html
+
+   Then load one of the example JSON traces in the `traces` folder,
+   or generate new traces with the `generate_SGRAND_trace` function.
 
 ## Features
 
@@ -65,3 +71,5 @@ Learn_SGrand_Decoding/
 - **Monte Carlo logs**: `awgn_monte_carlo.log` in `traces/` directory
 - **Visualization**: Interactive HTML report in `sgrand_visualization.html`
 - **Performance metrics**: BER, decoding success rates, and query counts
+
+Thanks for Gemini3 Pro, GPT5.1
