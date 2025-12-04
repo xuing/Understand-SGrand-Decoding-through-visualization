@@ -1,0 +1,6 @@
+[
+    { "name": "Golay(24,12) Queries 16", "url": "./traces/trace_Golay(24,12)_queries16_20251203_143902.json","default": true },
+    { "name": "Golay(24,12) Queries 35", "url": "./traces/trace_Golay(24,12)_queries16_20251203_143902.json" },
+    { "name": "Hamming(8,4) Queries 3", "url": "./traces/trace_Hamming(8,4)_queries3_20251203_172407.json" },
+    { "name": "Hamming(8,4) Queries 17", "url": "./traces/trace_Hamming(8,4)_queries17_20251203_172132.json" }
+]

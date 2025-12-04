@@ -40,7 +40,7 @@
 
 <div id="app" class="h-screen flex flex-col overflow-hidden text-slate-800 pb-2">
 
-    <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
+<header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
         <div class="flex items-center gap-3">
             <div class="bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">SG</div>
             <h1 class="font-bold text-sm text-slate-700 flex items-center gap-2">
@@ -63,17 +63,17 @@
 
         <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200 shadow-sm">
             <button @click="firstStep" :disabled="!traceData || currentStep <= 0" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-400 transition disabled:opacity-30"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg></button>
-            <button @click="prevStep" :disabled="!traceData || currentStep <= 0" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Previous (Left Arrow)"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+            <button @click="prevStep" :disabled="!traceData || currentStep <= 0" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Previous"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
 
-            <div @click="jumpToStep" class="w-32 text-center text-xs font-mono font-medium select-none flex items-center justify-center gap-2 mx-2 cursor-pointer hover:bg-slate-100 rounded transition" title="Click to Jump">
+            <div @click="jumpToStep" class="w-32 text-center text-xs font-mono font-medium select-none flex items-center justify-center gap-2 mx-2 cursor-pointer hover:bg-slate-100 rounded transition">
                 <span class="text-slate-400">Query</span>
                 <span class="text-indigo-600 font-bold bg-indigo-50 px-1.5 rounded">{{ currentStep + 1 }}</span>
                 <span class="text-slate-300">/</span>
                 <span class="text-slate-500">{{ totalSteps }}</span>
             </div>
 
-            <button @click="togglePlay" :disabled="!traceData" class="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm hover:border-indigo-300 text-xs font-semibold w-16 disabled:opacity-50 text-slate-700 transition" title="Play/Pause (Space)">{{ isPlaying ? 'Pause' : 'Play' }}</button>
-            <button @click="nextStep" :disabled="!traceData || currentStep >= totalSteps - 1" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Next (Right Arrow)"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+            <button @click="togglePlay" :disabled="!traceData" class="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm hover:border-indigo-300 text-xs font-semibold w-16 disabled:opacity-50 text-slate-700 transition">{{ isPlaying ? 'Pause' : 'Play' }}</button>
+            <button @click="nextStep" :disabled="!traceData || currentStep >= totalSteps - 1" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-500 transition disabled:opacity-30" title="Next"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
             <button @click="lastStep" :disabled="!traceData || currentStep >= totalSteps - 1" class="p-1.5 hover:bg-white hover:text-indigo-600 hover:shadow rounded text-slate-400 transition disabled:opacity-30"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg></button>
 
             <div class="h-6 w-px bg-slate-200 mx-2"></div>
@@ -84,13 +84,27 @@
             </button>
         </div>
 
-        <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-medium transition shadow flex items-center gap-2 group">
-            <svg class="w-3 h-3 text-slate-400 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-            Load JSON Trace
-            <input type="file" @change="loadJson" accept=".json" class="hidden">
-        </label>
-    </header>
+        <div class="flex items-center gap-2">
+            <div class="relative group" v-if="exampleList.length > 0 || isExampleLoading">
+                <select @change="loadSelectedExample" v-model="selectedExampleUrl"
+                        :disabled="isExampleLoading || isTraceLoading"
+                        class="appearance-none bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 pl-3 pr-8 py-1.5 rounded text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 transition cursor-pointer w-41 truncate">
+                    <option value="" disabled selected>Select Example...</option>
+                    <option v-for="(ex, idx) in exampleList" :key="idx" :value="ex.url">{{ ex.name }}</option>
+                </select>
+                <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <svg v-if="isTraceLoading" class="animate-spin h-3 w-3 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+            </div>
 
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-medium transition shadow flex items-center gap-2 group whitespace-nowrap">
+                <svg class="w-3 h-3 text-slate-400 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                Local JSON
+                <input type="file" @change="loadLocalJson" accept=".json" class="hidden">
+            </label>
+        </div>
+    </header>
     <main class="flex-1 flex overflow-hidden relative">
         <aside class="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.01)] shrink-0 font-inter">
 
@@ -348,10 +362,11 @@
         new:     { bg: '#f0f9ff', border: '#0ea5e9', font: '#0369a1', width: 2 },
         visited: { bg: '#f1f5f9', border: '#cbd5e1', font: '#94a3b8', width: 1 },
         queue:   { bg: '#ffffff', border: '#e2e8f0', font: '#64748b', width: 1 },
-
-        // Heap View Special (Solid Border)
         heapNode: { bg: '#ffffff', border: '#cbd5e1', font: '#475569', width: 1, dashed: false }
     };
+
+    // 你的预设列表地址
+    const EXAMPLES_INDEX_URL = "./traces/sgrand_traces_examples.json";
 
     createApp({
         setup() {
@@ -362,8 +377,14 @@
             const playInterval = ref(null);
             const autoFocus = ref(true);
             const newlyAddedSet = ref(new Set());
-            const viewMode = ref('heap'); // DEFAULT: Heap View
+            const viewMode = ref('heap');
             const poppedHistory = ref([]);
+
+            // New: Examples State
+            const exampleList = ref([]);
+            const selectedExampleUrl = ref("");
+            const isExampleLoading = ref(false);
+            const isTraceLoading = ref(false);
 
             const networkRef = ref(null);
             const chartRef = ref(null);
@@ -401,25 +422,17 @@
             const getVectorId = (errArr) => JSON.stringify(errArr ? errArr.sort((a,b)=>a-b) : []);
             const isNewItem = (errArr) => newlyAddedSet.value.has(getVectorId(errArr));
 
-            // --- GRAPH LOGIC ---
-
+            // --- GRAPH LOGIC (Keeping same logic as before) ---
             const createNodeObject = (id, err, metric, type, level = 0) => {
                 let style = COLOR_THEME[type] || COLOR_THEME.queue;
                 if (viewMode.value === 'heap' && type === 'queue') style = COLOR_THEME.heapNode;
-
                 const hlColor = { background: style.bg, border: style.border };
-
                 return {
                     id: id,
                     label: `Err: ${formatIndices(err)}\nM: ${formatMetric(metric)}`,
                     level: level,
                     shape: 'box',
-                    color: {
-                        background: style.bg,
-                        border: style.border,
-                        highlight: hlColor
-                    },
-                    // 确保节点使用 JetBrains Mono 字体
+                    color: { background: style.bg, border: style.border, highlight: hlColor },
                     font: { face: 'JetBrains Mono', size: 12, color: style.font },
                     margin: 10, borderWidth: style.width,
                     widthConstraint: { minimum: 120, maximum: 180 },
@@ -430,12 +443,10 @@
 
             const syncGraphToStep = (targetStepIdx) => {
                 if (!traceData.value) return;
-
                 const steps = traceData.value.steps;
                 const currentStepData = steps[targetStepIdx];
                 const activeId = currentStepData.id;
 
-                // Update Newly Added
                 if (targetStepIdx > 0) {
                     const prevQ = steps[targetStepIdx - 1].queue || [];
                     const currQ = steps[targetStepIdx].queue || [];
@@ -453,18 +464,14 @@
                 const updates = [];
                 const currentVisIds = new Set(nodes.getIds());
 
-                // === MODE A: SEARCH TREE ===
                 if (viewMode.value === 'tree') {
                     const validGraphIds = new Set();
-
                     for (let i = 0; i <= targetStepIdx; i++) {
                         const s = steps[i];
                         let type = 'visited';
                         if (s.id === activeId) type = s.is_valid ? 'valid' : 'active';
                         validGraphIds.add(s.id);
-
                         let level = nodeLevelMap.get(s.id) || 0;
-
                         if (currentVisIds.has(s.id)) {
                             updates.push(createNodeObject(s.id, s.error_indices, s.metric, type, level));
                         } else {
@@ -472,7 +479,6 @@
                             if (s.parent) newEdges.push({ id: `${s.parent}-${s.id}`, from: s.parent, to: s.id });
                         }
                     }
-
                     const queue = currentStepData.queue || [];
                     queue.forEach(item => {
                         if (item.id && item.parent) {
@@ -480,9 +486,7 @@
                             const vecId = getVectorId(item.err);
                             const isNew = newlyAddedSet.value.has(vecId);
                             const type = isNew ? 'new' : 'queue';
-
                             let level = (nodeLevelMap.get(item.parent) || 0) + 1;
-
                             if (currentVisIds.has(item.id)) {
                                 updates.push(createNodeObject(item.id, item.err, item.metric, type, level));
                             } else {
@@ -491,37 +495,26 @@
                             }
                         }
                     });
-
                     const nodesToRemove = nodes.getIds().filter(id => !validGraphIds.has(id));
                     if (nodesToRemove.length) nodes.remove(nodesToRemove);
 
-                // === MODE B: MIN-HEAP ===
-                } else {
+                } else { // Heap Mode
                     const rawHistory = steps.slice(0, targetStepIdx + 1);
-                    poppedHistory.value = rawHistory.map((s, i) => ({
-                        ...s,
-                        stepNum: i + 1
-                    })).reverse();
-
+                    poppedHistory.value = rawHistory.map((s, i) => ({ ...s, stepNum: i + 1 })).reverse();
                     const queue = currentStepData.queue || [];
                     const heapNodeIds = new Set();
-
                     queue.forEach((item, index) => {
                         const heapId = `heap_${index}`;
                         heapNodeIds.add(heapId);
-
                         const vecId = getVectorId(item.err);
                         const isNew = newlyAddedSet.value.has(vecId);
                         const type = isNew ? 'new' : 'queue';
-
                         const level = Math.floor(Math.log2(index + 1));
-
                         if (currentVisIds.has(heapId)) {
                             updates.push(createNodeObject(heapId, item.err, item.metric, type, level));
                         } else {
                             newNodes.push(createNodeObject(heapId, item.err, item.metric, type, level));
                         }
-
                         if (index > 0) {
                             const parentIdx = Math.floor((index - 1) / 2);
                             const parentHeapId = `heap_${parentIdx}`;
@@ -531,33 +524,21 @@
                             }
                         }
                     });
-
                     const nodesToRemove = nodes.getIds().filter(id => !heapNodeIds.has(id));
                     if (nodesToRemove.length) nodes.remove(nodesToRemove);
                 }
 
-                // Commit
                 if (newNodes.length) nodes.add(newNodes);
                 if (updates.length) nodes.update(updates);
-
                 const currentEdgeIds = new Set(edges.getIds());
                 const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.id));
                 if (edgesToAdd.length) edges.add(edgesToAdd);
 
-                // --- FOCUS STRATEGY ---
                 if (network && autoFocus.value) {
                     if (viewMode.value === 'heap') {
-                        network.fit({
-                            animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" }
-                        });
-                    } else if (viewMode.value === 'tree' && activeId) {
-                        if (nodes.get(activeId)) {
-                            network.focus(activeId, {
-                                scale: network.getScale(),
-                                offset: {x: 0, y: 0},
-                                animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" }
-                            });
-                        }
+                        network.fit({ animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" } });
+                    } else if (viewMode.value === 'tree' && activeId && nodes.get(activeId)) {
+                        network.focus(activeId, { scale: network.getScale(), offset: {x: 0, y: 0}, animation: { duration: isPlaying.value ? 400 : 800, easingFunction: "easeInOutQuad" } });
                     }
                 }
 
@@ -570,12 +551,10 @@
                 }
             };
 
-            // --- VIEW CONTROLS ---
             const zoomIn = () => { if(network) { const s = network.getScale(); network.moveTo({scale: s * 1.2}); } };
             const zoomOut = () => { if(network) { const s = network.getScale(); network.moveTo({scale: s / 1.2}); } };
             const fitView = () => { if(network) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); };
 
-            // --- JUMP & KEYBOARD ---
             const jumpToStep = () => {
                 const input = prompt(`Jump to step (1 - ${totalSteps.value}):`);
                 if (input) {
@@ -598,25 +577,87 @@
                 }
             };
 
-            // --- FILE LOAD & INIT ---
-            const loadJson = (event) => {
+            // --- DATA LOADING & INIT ---
+
+            // 1. Core Logic to process any loaded JSON object
+            const processJsonData = (json) => {
+                try {
+                    traceData.value = json;
+                    nodeLevelMap.clear();
+                    if (json.steps) json.steps.forEach(step => {
+                        let level = 0;
+                        if (step.parent && nodeLevelMap.has(step.parent)) level = nodeLevelMap.get(step.parent) + 1;
+                        nodeLevelMap.set(step.id, level);
+                    });
+                    initVisualization();
+                } catch(err) {
+                    alert("Data Error: " + err.message);
+                    console.error(err);
+                }
+            };
+
+            // 2. Load from Local File
+            const loadLocalJson = (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
+                // Reset dropdown if file is loaded
+                selectedExampleUrl.value = "";
+
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
                         const json = JSON.parse(e.target.result);
-                        traceData.value = json;
-                        nodeLevelMap.clear();
-                        if (json.steps) json.steps.forEach(step => {
-                            let level = 0;
-                            if (step.parent && nodeLevelMap.has(step.parent)) level = nodeLevelMap.get(step.parent) + 1;
-                            nodeLevelMap.set(step.id, level);
-                        });
-                        initVisualization();
-                    } catch(err) { alert("JSON Error: " + err.message); }
+                        processJsonData(json);
+                    } catch(err) { alert("JSON Parse Error: " + err.message); }
                 };
                 reader.readAsText(file);
+            };
+
+            // 3. Fetch Examples List (Updated with Auto-Load Logic)
+            const fetchExampleList = async () => {
+                isExampleLoading.value = true;
+                try {
+                    const res = await fetch(EXAMPLES_INDEX_URL);
+                    if(!res.ok) throw new Error("Failed to fetch examples list");
+
+                    const data = await res.json();
+                    exampleList.value = data;
+
+                    // --- 新增逻辑：查找并加载默认项 ---
+                    const defaultItem = data.find(item => item.default === true);
+
+                    if (defaultItem) {
+                        // 设置下拉菜单的值
+                        selectedExampleUrl.value = defaultItem.url;
+                        // 触发加载函数
+                        loadSelectedExample();
+                    }
+                    // ------------------------------------
+
+                } catch (e) {
+                    console.warn("Could not load examples list:", e);
+                } finally {
+                    isExampleLoading.value = false;
+                }
+            };
+            // 4. Load Selected Example URL
+            const loadSelectedExample = async () => {
+                if(!selectedExampleUrl.value) return;
+
+                stopPlay();
+                isTraceLoading.value = true;
+
+                try {
+                    const res = await fetch(selectedExampleUrl.value);
+                    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const json = await res.json();
+                    processJsonData(json);
+                } catch (e) {
+                    alert("Failed to load trace file: " + e.message);
+                    selectedExampleUrl.value = ""; // Reset on failure
+                } finally {
+                    isTraceLoading.value = false;
+                }
             };
 
             const initVisualization = () => {
@@ -636,7 +677,7 @@
                 syncGraphToStep(0);
             };
 
-            // --- WATCHERS ---
+            // --- WATCHERS & LIFECYCLE ---
             watch(currentStep, (newVal) => syncGraphToStep(newVal));
 
             watch(viewMode, () => {
@@ -669,23 +710,17 @@
             const stopPlay = () => { isPlaying.value = false; clearInterval(playInterval.value); };
 
             onMounted(() => {
-                // 1. 设置 Chart.js 默认字体为 Inter，保持 UI 统一
                 Chart.defaults.font.family = "'Inter', sans-serif";
-                Chart.defaults.color = '#64748b'; // slate-500
+                Chart.defaults.color = '#64748b';
 
-                // 2. 初始化 Vis Network
                 network = new vis.Network(networkRef.value, { nodes, edges }, {
                     interaction: { dragNodes: false, dragView: true, zoomView: true, hover: true },
                     layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', levelSeparation: 100, nodeSpacing: 200, treeSpacing: 200, blockShifting: false, edgeMinimization: false, parentCentralization: true } },
                     physics: { enabled: false, stabilization: false },
-                    nodes: {
-                        shadow: { color: 'rgba(0,0,0,0.1)', size: 5 },
-                        borderWidthSelected: 2
-                    },
+                    nodes: { shadow: { color: 'rgba(0,0,0,0.1)', size: 5 }, borderWidthSelected: 2 },
                     edges: { color: '#cbd5e1', smooth: false }
                 });
 
-                // 3. 初始化 Chart
                 chart = new Chart(chartRef.value.getContext('2d'), {
                     type: 'bar',
                     data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 4 }] },
@@ -693,23 +728,16 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
-                        scales: {
-                            x: {
-                                display: true,
-                                grid: { display: false },
-                                ticks: { display: false } // X轴文字（索引）隐藏，因为上方OEI已经显示了
-                            },
-                            y: { display: false }
-                        },
+                        scales: { x: { display: true, grid: { display: false }, ticks: { display: false } }, y: { display: false } },
                         animation: false
                     }
                 });
 
-                window.addEventListener('resize', () => {
-                     if(chart) chart.resize();
-                     if(network) network.fit();
-                });
+                window.addEventListener('resize', () => { if(chart) chart.resize(); if(network) network.fit(); });
                 window.addEventListener('keydown', handleKeydown);
+
+                // Fetch the preset examples
+                fetchExampleList();
             });
 
             onUnmounted(() => {
@@ -719,14 +747,15 @@
 
             return {
                 traceData, currentStep, totalSteps, meta, currentData, isPlaying,
-                networkRef, chartRef, loadJson, nextStep, prevStep, firstStep, lastStep,
+                networkRef, chartRef, loadLocalJson, nextStep, prevStep, firstStep, lastStep,
                 togglePlay, formatIndices, formatMetric, formatY, renderMath,
                 autoFocus, isNewItem, currentCandidate, thetaY, viewMode, poppedHistory,
-                zoomIn, zoomOut, fitView, jumpToStep
+                zoomIn, zoomOut, fitView, jumpToStep,
+                // New Exports
+                exampleList, selectedExampleUrl, loadSelectedExample, isExampleLoading, isTraceLoading
             };
         }
     }).mount('#app');
 </script>
-
 </body>
 </html>
