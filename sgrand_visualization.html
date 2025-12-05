@@ -710,17 +710,75 @@
             const stopPlay = () => { isPlaying.value = false; clearInterval(playInterval.value); };
 
             onMounted(() => {
+                // 1. Chart.js 配置
                 Chart.defaults.font.family = "'Inter', sans-serif";
                 Chart.defaults.color = '#64748b';
 
+                // 2. 初始化 Vis Network
                 network = new vis.Network(networkRef.value, { nodes, edges }, {
-                    interaction: { dragNodes: false, dragView: true, zoomView: true, hover: true },
+                    interaction: {
+                        dragNodes: false,
+                        dragView: true,
+                        zoomView: true,
+                        hover: true,
+                    },
                     layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', levelSeparation: 100, nodeSpacing: 200, treeSpacing: 200, blockShifting: false, edgeMinimization: false, parentCentralization: true } },
                     physics: { enabled: false, stabilization: false },
                     nodes: { shadow: { color: 'rgba(0,0,0,0.1)', size: 5 }, borderWidthSelected: 2 },
                     edges: { color: '#cbd5e1', smooth: false }
                 });
 
+                // ============================================================
+                // 【完美交互版】
+                // 1. 拦截操作 -> 停止自动跟随
+                // 2. 边界拦截 -> 到达极限时直接屏蔽滚轮信号，防止画面漂移
+                // ============================================================
+
+                const minScale = 0.15; // 最小比例
+                const maxScale = 4.0;  // 最大比例
+                const dom = networkRef.value;
+
+                // --- 核心拦截逻辑 ---
+                const handleWheel = (e) => {
+                    // 1. 用户介入，先关掉自动跟随
+                    if (autoFocus.value) autoFocus.value = false;
+
+                    const scale = network.getScale();
+
+                    // e.deltaY > 0 代表向下滚动（缩小），< 0 代表向上滚动（放大）
+
+                    // 情况A: 已经很小了，还想缩小 -> 禁止！
+                    if (scale <= minScale && e.deltaY > 0) {
+                        e.preventDefault(); // 阻止浏览器/Vis.js 处理这个事件
+                        e.stopPropagation();
+                    }
+
+                    // 情况B: 已经很大了，还想放大 -> 禁止！
+                    if (scale >= maxScale && e.deltaY < 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                };
+
+                // 注意：必须设置 passive: false 才能使用 preventDefault
+                dom.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+
+                // 处理触摸和点击（仅用于关闭自动跟随）
+                const stopAuto = () => { if (autoFocus.value) autoFocus.value = false; };
+                dom.addEventListener('touchstart', stopAuto, { capture: true, passive: true });
+                dom.addEventListener('mousedown', stopAuto, { capture: true });
+
+                // 安全网：万一通过其他方式（如触摸手势）突破了边界，再用 moveTo 修正
+                // 但对于鼠标滚轮，上面的 handleWheel 已经完美拦截了，不会触发这里
+                network.on("zoom", () => {
+                    if (autoFocus.value) return; // 自动模式下不限制
+                    const scale = network.getScale();
+                    if (scale < minScale) network.moveTo({ scale: minScale, animation: false });
+                    if (scale > maxScale) network.moveTo({ scale: maxScale, animation: false });
+                });
+                // ============================================================
+
+                // 3. 初始化 Chart
                 chart = new Chart(chartRef.value.getContext('2d'), {
                     type: 'bar',
                     data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 4 }] },
@@ -733,13 +791,14 @@
                     }
                 });
 
-                window.addEventListener('resize', () => { if(chart) chart.resize(); if(network) network.fit(); });
-                window.addEventListener('keydown', handleKeydown);
+                window.addEventListener('resize', () => {
+                    if(chart) chart.resize();
+                    if(network) network.fit();
+                });
 
-                // Fetch the preset examples
+                window.addEventListener('keydown', handleKeydown);
                 fetchExampleList();
             });
-
             onUnmounted(() => {
                 window.removeEventListener('keydown', handleKeydown);
                 stopPlay();
